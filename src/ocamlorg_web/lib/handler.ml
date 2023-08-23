@@ -494,6 +494,32 @@ module Package_helper = struct
     aux [] xs
 end
 
+let is_ocaml_yet t id req =
+  let</>? meta =
+    List.find_opt (fun x -> x.Data.Is_ocaml_yet.id = id) Data.Is_ocaml_yet.all
+  in
+  let tutorials =
+    Data.Tutorial.all
+    |> List.filter (fun (t : Data.Tutorial.t) -> t.section = Guides)
+  in
+  let packages =
+    meta.categories
+    |> List.concat_map (fun category -> category.Data.Is_ocaml_yet.packages)
+    |> List.map Ocamlorg_package.Name.of_string
+    |> List.filter_map (fun name ->
+           match Ocamlorg_package.get_latest t name with
+           | Some x -> Some x
+           | None ->
+               Dream.error (fun log ->
+                   log ~request:req "Package not found: %s"
+                     (Ocamlorg_package.Name.to_string name));
+               None)
+    |> List.map (Package_helper.frontend_package t)
+    |> List.map (fun pkg -> (pkg.Ocamlorg_frontend.Package.name, pkg))
+    |> List.to_seq |> Hashtbl.of_seq
+  in
+  Dream.html (Ocamlorg_frontend.is_ocaml_yet ~tutorials ~packages meta)
+
 let packages state _req =
   let package { Ocamlorg_package.Statistics.name; version; info } =
     let versions = Package_helper.versions state name in
